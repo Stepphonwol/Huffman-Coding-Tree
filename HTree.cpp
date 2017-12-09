@@ -8,8 +8,10 @@ HTree::HTree()
 	shiftamount = 0;
 	cout << "Name of the input text :" << endl;
 	getline(cin, input_name);
-	cout << "Name of the output dat : " << endl;
+	cout << "Name of the buffer dat : " << endl;
 	//cin.get();
+	getline(cin, buffer_name);
+	cout << "Name of the output text: " << endl;
 	getline(cin, output_name);
 	read_input();
 }
@@ -67,7 +69,7 @@ void HTree::buildCodeHelp(Node* x, string s)
 	buildCodeHelp(x->right, s + "1");
 }
 
-void HTree::bit_to_bit(int sign)
+/*void HTree::bit_to_bit(int sign)
 {
 	if (sign == 1) {
 		*bit_cont |= 1;
@@ -105,55 +107,117 @@ void HTree::write_bit_string(string x)
 		bit_to_bit(judge);
 	}
 }
+*/
 
-void HTree::writeTrie()
+void HTree::writeTrie(BinaryOut& bin)
 {
-	out.open(output_name, fstream::binary | fstream::out);
-	int s{ 0 };
-	writeTrieHelp(root);
+	//out.open(output_name, fstream::binary | fstream::out);
+	//int s{ 0 };
+	//BinaryOut o{ out };
+	writeTrieHelp(root, bin);
 }
 
-void HTree::writeTrieHelp(Node* x)
+void HTree::writeTrieHelp(Node* x, BinaryOut& bin)
 {
 	if (x->isLeaf()) {
 		//out << true;
 		//bool temp{ true };
 		//out.write((char*)&temp, sizeof(bool));
-		bit_to_bit(1);
-		write_bit(x->ch);
+		//bit_to_bit(1);
+		bin.writeBit(1);
+		bin.writeChar(x->ch); // send real value of x->ch
 		//ascii_write(x->ch);
 		return;
 	}
-	bit_to_bit(0);
+	bin.writeBit(0);
 	//out << false;
-	writeTrieHelp(x->left);
-	writeTrieHelp(x->right);
+	writeTrieHelp(x->left, bin);
+	writeTrieHelp(x->right, bin);
 }
 
-void HTree::ascii_write(char x)
+/*void HTree::ascii_write(char x)
 {
 	for (int i = 7; i >= 0; --i) {
 		bool temp = (x & 1 << i) != 0;
 		//out << temp;
 		out.write((char*)&temp, sizeof(temp));
 	}
-}
+}*/
 
-void HTree::write_src()
+void HTree::write_src(BinaryOut& bin)
 {
-	write_bit_int(src.size());
+	//write_bit_int(src.size());
+	bin.writeInt(src.size());
 	for (int i = 0; i < src.size(); ++i) {
 		string code = st[src[i]];
-		write_bit_string(code);
+		//write_bit_string(code);
+		bin.writeString(code);
 	}
-	out.close();
+	bin.recycle();
+	/*if (shiftamount > 0) {
+		*bit_cont <<= 8 - shiftamount;
+		out << *bit_cont;
+		shiftamount = 0;
+	}*/
+}
+
+/*bool HTree::read_bit()
+{
+	out >> *bit_cont; // read 8 bits
+	char temp = *bit_cont; // get the first bit
+	temp &= 128; // get the first bit
+	temp >>= 7; // get the first bit
+	*bit_cont <<= 1; // first bit processed
+	if (temp == '1') {
+		char* next_bit_cont;
+		out >> *next_bit_cont;
+		return true;
+	}
+	else if (temp == '0') {
+		return false;
+	}
+}*/
+
+Node* HTree::readTrie(BinaryIn& Bin)
+{
+	if (Bin.readBit()) {
+		return new Node(Bin.readChar(), 0, NULL, NULL);
+	}
+	return new Node('\0', 0, readTrie(Bin), readTrie(Bin));
 }
 
 void HTree::compress()
 {
+	out.open(buffer_name, fstream::binary | fstream::out);
+	BinaryOut o( out );
 	calc_freq();
 	root = buildTrie();
 	buildCode();
-	writeTrie();
-	write_src();
+	writeTrie(o);
+	write_src(o);
+	// deconstructor of o will close fstream out
+}
+
+void HTree::decompress()
+{
+	out.open(buffer_name, fstream::binary | fstream::in);
+	out.seekg(0, fstream::beg);
+	ans.open(output_name, fstream::out);
+	BinaryIn b(out);
+	BinaryOut o(ans);
+	root = readTrie(b);
+	int n = b.readInt();
+	for (int i = 0; i < n; ++i) {
+		Node* x = root;
+		while (!x->isLeaf()) {
+			if (b.readBit()) {
+				x = x->left;
+			}
+			else {
+				x = x->right;
+			}
+		}
+		o.writeChar(x->ch);
+	}
+	// deconstructor of b and o will close the fstream
 }
